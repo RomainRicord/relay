@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 
 import {
-	decryptText,
-	deriveAesKeyECDH,
+	decryptWithDEK,
 	encryptWithDEK,
 	exportPublicJwk,
 	generateDEK,
 	generateECDHKeyPair,
+	unwrapDEK,
 	wrapDEKForUser,
 } from "./Function";
 
@@ -39,6 +39,11 @@ export default function WebCryptoE2EEDemo() {
 		ciphertext_b64: string;
 	} | null>(null);
 	const [decrypted, setDecrypted] = useState<string>("");
+
+	const [wrappedDEKForBob, setWrappedDEKForBob] = useState<{
+		wrapped_key_b64: string;
+		iv_b64: string;
+	} | null>(null);
 
 	const [status, setStatus] = useState<string>("Prêt.");
 
@@ -81,6 +86,8 @@ export default function WebCryptoE2EEDemo() {
 				bob.kp.publicKey
 			);
 
+			setWrappedDEKForBob(wrappedForBob);
+
 			setStatus("Chiffrement AES-GCM…");
 			setEncrypted(enc);
 			setDecrypted("");
@@ -93,28 +100,32 @@ export default function WebCryptoE2EEDemo() {
 	}
 
 	async function onDecryptAsBob() {
-		if (!encrypted || !alice.kp || !bob.kp) return;
+		if (!encrypted || !wrappedDEKForBob || !alice.kp || !bob.kp) return;
+
 		try {
-			setStatus("Bob dérive la même clé AES partagée (ECDH)…");
-			const aesKey = await deriveAesKeyECDH(
+			setStatus("Bob récupère la DEK…");
+
+			// 1️⃣ Bob déchiffre la DEK
+			const dek = await unwrapDEK(
+				wrappedDEKForBob.wrapped_key_b64,
+				wrappedDEKForBob.iv_b64,
 				bob.kp.privateKey,
 				alice.kp.publicKey
 			);
 
-			setStatus("Déchiffrement AES-GCM…");
-			const pt = await decryptText(
-				aesKey,
+			setStatus("Déchiffrement avec DEK…");
+
+			// 2️⃣ Bob déchiffre les données
+			const pt = await decryptWithDEK(
+				dek,
 				encrypted.iv_b64,
 				encrypted.ciphertext_b64
 			);
+
 			setDecrypted(pt);
 			setStatus("Message déchiffré ✅");
 		} catch (e: any) {
-			setStatus(
-				`Erreur déchiffrement (mauvaise clé/IV/ct ou altération): ${
-					e?.message ?? String(e)
-				}`
-			);
+			setStatus(`Erreur déchiffrement: ${e?.message ?? String(e)}`);
 		}
 	}
 

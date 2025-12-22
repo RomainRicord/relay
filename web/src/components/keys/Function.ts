@@ -131,3 +131,16 @@ export async function unwrapDEK(
 		"decrypt",
 	]);
 }
+
+export async function decryptWithDEK(
+	dek: CryptoKey,
+	iv_b64: string,
+	ciphertext_b64: string
+): Promise<string> {
+	const iv = new Uint8Array(b64ToAb(iv_b64));
+	const ct = b64ToAb(ciphertext_b64);
+
+	const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, dek, ct);
+
+	return new TextDecoder().decode(pt);
+}
