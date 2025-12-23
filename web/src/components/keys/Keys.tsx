@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 
+import { AuthContext } from "../../context/useUser";
 import {
 	decryptWithDEK,
 	encryptWithDEK,
@@ -11,7 +12,6 @@ import {
 } from "./Function";
 
 import type { Party } from "./Function";
-
 /**
  * WebCrypto E2EE demo:
  * - ECDH P-256 (key agreement)
@@ -20,16 +20,7 @@ import type { Party } from "./Function";
  */
 
 export default function KeysManagement() {
-	const [alice, setAlice] = useState<Party>({
-		name: "Alice",
-		kp: null,
-		publicJwk: null,
-	});
-	const [bob, setBob] = useState<Party>({
-		name: "Bob",
-		kp: null,
-		publicJwk: null,
-	});
+	const { user, setUser } = useContext(AuthContext)!;
 
 	const [message, setMessage] = useState(
 		"Salut Bob 👋 Ceci est un message E2EE."
@@ -47,19 +38,19 @@ export default function KeysManagement() {
 
 	const [status, setStatus] = useState<string>("Prêt.");
 
-	const ready = useMemo(() => !!alice.kp && !!bob.kp, [alice.kp, bob.kp]);
+	const ready = useMemo(() => !!user.kp && !!user.kp, [user.kp, user.kp]);
 
 	async function onGenerateKeys() {
 		try {
 			setStatus("Génération des clés ECDH…");
 			const a = await generateECDHKeyPair();
-			const b = await generateECDHKeyPair();
+			//const b = await generateECDHKeyPair();
 
 			const aPub = await exportPublicJwk(a.publicKey);
-			const bPub = await exportPublicJwk(b.publicKey);
+			//const bPub = await exportPublicJwk(b.publicKey);
 
-			setAlice({ name: "Alice", kp: a, publicJwk: aPub });
-			setBob({ name: "Bob", kp: b, publicJwk: bPub });
+			setUser({ ...user, kp: a, publicJwk: aPub });
+			//setBob({ name: "Bob", kp: b, publicJwk: bPub });
 			setEncrypted(null);
 			setDecrypted("");
 			setStatus("Clés générées ✅");

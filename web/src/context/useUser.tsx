@@ -7,6 +7,8 @@ type AppUser = {
 	id: string;
 	user_id: string;
 	email: string;
+	kp: CryptoKeyPair | null;
+	publicJwk: JsonWebKey | null;
 };
 
 export type AuthContextType = {
@@ -38,6 +40,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [user, setUser] = useState<AppUser>({} as AppUser);
+
 	const [userInput, setUserInput] = useState({ email: "", a2f: "" });
 	const [connected, setConnected] = useState(false);
 	const [page, setPage] = useState<RouteKey>("login");
