@@ -19,7 +19,7 @@ import type { Party } from "./Function";
  * - Encrypt/decrypt text
  */
 
-export default function KeysManagement() {
+export default function WebCryptoE2EEDemo() {
 	const [alice, setAlice] = useState<Party>({
 		name: "Alice",
 		kp: null,
