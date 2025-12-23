@@ -9,6 +9,15 @@ function SubmitEvent(
 	>,
 	userId: string | null,
 	setConnected: React.Dispatch<React.SetStateAction<boolean>>,
+	setUser: React.Dispatch<
+		React.SetStateAction<{
+			id: string;
+			user_id: string;
+			email: string;
+			kp: CryptoKeyPair | null;
+			publicJwk: JsonWebKey | null;
+		}>
+	>,
 	setQr: React.Dispatch<React.SetStateAction<string | null>>,
 	setUserId: React.Dispatch<React.SetStateAction<string | null>>,
 	setStep: React.Dispatch<React.SetStateAction<"EMAIL" | "A2F" | "ENROLL">>,
@@ -22,7 +31,7 @@ function SubmitEvent(
 	}
 
 	if (step === "EMAIL") {
-		fetch("http://localhost:8082/login/init", {
+		fetch("/api/login/init", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ email: userInput.email }),
@@ -55,7 +64,7 @@ function SubmitEvent(
 	}
 
 	// STEP A2F ou ENROLL → vérification du code
-	fetch("http://localhost:8082/login/verify", {
+	fetch("/api/login/verify", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -67,6 +76,16 @@ function SubmitEvent(
 		.then((data) => {
 			if (data.token) {
 				localStorage.setItem("jwt", data.token);
+				if (data.user_id) {
+					localStorage.setItem("user_id", data.user_id);
+				}
+				setUser({
+					id: data.user_id,
+					user_id: data.user_id,
+					email: userInput.email,
+					kp: null,
+					publicJwk: null,
+				});
 				setResult({ message: "Connected", code: 200 });
 				setConnected(true);
 				setPage("dashboard");

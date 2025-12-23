@@ -5,6 +5,7 @@ function Form() {
 	const {
 		userInput,
 		setUserInput,
+		setUser,
 		setConnected,
 		setPage,
 		result,
@@ -37,6 +38,7 @@ function Form() {
 					setResult!,
 					userId!,
 					setConnected!,
+					setUser!,
 					setQr!,
 					setUserId!,
 					setStep!,

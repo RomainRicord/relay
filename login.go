@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -75,11 +76,21 @@ func VerifyA2FHandler(c *gin.Context) {
 		DB.Exec(`UPDATE users SET a2f_enabled = true WHERE id = $1`, req.UserID)
 	}
 
-	// TODO: JWT signé
-	token := fmt.Sprintf("jwt-%s", req.UserID)
+	// JWT signé (compatible AuthMiddleware)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": req.UserID,
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+	})
+
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sign token"})
+		return
+	}
 
 	c.JSON(200, gin.H{
-		"token": token,
+		"token":   tokenString,
+		"user_id": req.UserID,
 	})
 }
 
@@ -166,11 +177,20 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// TODO: vrai JWT plus tard
-	token := fmt.Sprintf("jwt-%s", userID)
+	// Génération du JWT
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": userID,
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+	})
+
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sign token"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"token":   token,
+		"token":   tokenString,
 		"user_id": userID,
 	})
 }

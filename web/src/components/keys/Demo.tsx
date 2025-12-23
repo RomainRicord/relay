@@ -41,8 +41,8 @@ export default function WebCryptoE2EEDemo() {
 	const [decrypted, setDecrypted] = useState<string>("");
 
 	const [wrappedDEKForBob, setWrappedDEKForBob] = useState<{
-		wrapped_key_b64: string;
-		iv_b64: string;
+		encrypted_key_b64: string;
+		nonce_b64: string;
 	} | null>(null);
 
 	const [status, setStatus] = useState<string>("Prêt.");
@@ -80,11 +80,7 @@ export default function WebCryptoE2EEDemo() {
 			const enc = await encryptWithDEK(dek, message);
 
 			// 3. Chiffrer la DEK pour Bob
-			const wrappedForBob = await wrapDEKForUser(
-				dek,
-				alice.kp.privateKey,
-				bob.kp.publicKey
-			);
+			const wrappedForBob = await wrapDEKForUser(dek, bob.kp.publicKey);
 
 			setWrappedDEKForBob(wrappedForBob);
 
@@ -100,17 +96,16 @@ export default function WebCryptoE2EEDemo() {
 	}
 
 	async function onDecryptAsBob() {
-		if (!encrypted || !wrappedDEKForBob || !alice.kp || !bob.kp) return;
+		if (!encrypted || !wrappedDEKForBob || !bob.kp) return;
 
 		try {
 			setStatus("Bob récupère la DEK…");
 
 			// 1️⃣ Bob déchiffre la DEK
 			const dek = await unwrapDEK(
-				wrappedDEKForBob.wrapped_key_b64,
-				wrappedDEKForBob.iv_b64,
-				bob.kp.privateKey,
-				alice.kp.publicKey
+				wrappedDEKForBob.encrypted_key_b64,
+				wrappedDEKForBob.nonce_b64,
+				bob.kp.privateKey
 			);
 
 			setStatus("Déchiffrement avec DEK…");

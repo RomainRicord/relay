@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type CreateClientRequest struct {
+type CreateClientLegacyRequest struct {
 	EncryptedPayload []byte            `json:"encrypted_payload"`
 	Nonce            []byte            `json:"nonce"`
 	WrappedKeys      map[string][]byte `json:"wrapped_keys"` // userID -> encrypted DEK
@@ -17,7 +17,7 @@ type CreateClientRequest struct {
 func CreateClient(c *gin.Context) {
 	//userID := c.GetString("user_id")
 
-	var req CreateClientRequest
+	var req CreateClientLegacyRequest
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return

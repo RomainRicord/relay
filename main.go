@@ -80,6 +80,15 @@ func main() {
 	r.POST("/login/init", LoginInitHandler)
 	r.POST("/login/verify", VerifyA2FHandler)
 
+	// E2EE Routes
+	r.POST("/keys/register", AuthMiddleware(), RegisterE2EEKey)
+	r.GET("/keys/:user_id", AuthMiddleware(), GetUserE2EEKey)
+	r.GET("/users", AuthMiddleware(), GetAllUsersHandler)
+
+	// Client Data Routes
+	r.POST("/clients", AuthMiddleware(), CreateClientHandler)
+	r.GET("/clients", AuthMiddleware(), GetClientsHandler)
+
 	// --- Lancement serveur avec arrêt propre ---
 	srv := &http.Server{
 		Addr:         ":8082",

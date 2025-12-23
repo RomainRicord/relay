@@ -22,6 +22,20 @@ export async function exportPublicJwk(publicKey: CryptoKey) {
 	return await crypto.subtle.exportKey("jwk", publicKey);
 }
 
+export async function exportPublicKeyRaw(publicKey: CryptoKey) {
+	return await crypto.subtle.exportKey("raw", publicKey);
+}
+
+export async function importPublicKeyRaw(raw: ArrayBuffer) {
+	return await crypto.subtle.importKey(
+		"raw",
+		raw,
+		{ name: "ECDH", namedCurve: "P-256" },
+		true,
+		[]
+	);
+}
+
 export async function generateECDHKeyPair(): Promise<CryptoKeyPair> {
 	return await crypto.subtle.generateKey(
 		{ name: "ECDH", namedCurve: "P-256" },
@@ -90,40 +104,60 @@ export async function encryptClientData(dek: CryptoKey, data: string) {
 	};
 }
 
-export async function wrapDEKForUser(
-	dek: CryptoKey,
-	ownPriv: CryptoKey,
-	otherPub: CryptoKey
-) {
-	const wrappingKey = await deriveAesKeyECDH(ownPriv, otherPub);
+export async function wrapDEKForUser(dek: CryptoKey, recipientPub: CryptoKey) {
+	// 1. Generate Ephemeral Key Pair
+	const ephKp = await generateECDHKeyPair();
 
+	// 2. Derive Wrapping Key (EphPriv + RecipientPub)
+	const wrappingKey = await deriveAesKeyECDH(ephKp.privateKey, recipientPub);
+
+	// 3. Encrypt DEK
 	const rawDEK = await crypto.subtle.exportKey("raw", dek);
 	const iv = crypto.getRandomValues(new Uint8Array(12));
-
 	const wrapped = await crypto.subtle.encrypt(
 		{ name: "AES-GCM", iv },
 		wrappingKey,
 		rawDEK
 	);
 
+	// 4. Export Ephemeral Public Key
+	const rawEphPub = await crypto.subtle.exportKey("raw", ephKp.publicKey);
+
+	// 5. Concatenate [EphPub (65)] + [Ciphertext]
+	const combined = new Uint8Array(rawEphPub.byteLength + wrapped.byteLength);
+	combined.set(new Uint8Array(rawEphPub), 0);
+	combined.set(new Uint8Array(wrapped), rawEphPub.byteLength);
+
 	return {
-		wrapped_key_b64: abToB64(wrapped),
-		iv_b64: abToB64(iv.buffer),
+		encrypted_key_b64: abToB64(combined.buffer),
+		nonce_b64: abToB64(iv.buffer),
 	};
 }
 
 export async function unwrapDEK(
-	wrapped_b64: string,
-	iv_b64: string,
-	ownPriv: CryptoKey,
-	otherPub: CryptoKey
+	encrypted_key_b64: string,
+	nonce_b64: string,
+	ownPriv: CryptoKey
 ): Promise<CryptoKey> {
-	const wrappingKey = await deriveAesKeyECDH(ownPriv, otherPub);
+	const combined = b64ToAb(encrypted_key_b64);
+	const combinedBytes = new Uint8Array(combined);
 
+	// 1. Extract EphPub (first 65 bytes for P-256 uncompressed)
+	// Note: P-256 raw is 65 bytes (0x04 + 32 + 32)
+	const rawEphPub = combinedBytes.slice(0, 65);
+	const ciphertext = combinedBytes.slice(65);
+
+	// 2. Import EphPub
+	const ephPub = await importPublicKeyRaw(rawEphPub.buffer);
+
+	// 3. Derive Wrapping Key (OwnPriv + EphPub)
+	const wrappingKey = await deriveAesKeyECDH(ownPriv, ephPub);
+
+	// 4. Decrypt
 	const raw = await crypto.subtle.decrypt(
-		{ name: "AES-GCM", iv: new Uint8Array(b64ToAb(iv_b64)) },
+		{ name: "AES-GCM", iv: new Uint8Array(b64ToAb(nonce_b64)) },
 		wrappingKey,
-		b64ToAb(wrapped_b64)
+		ciphertext
 	);
 
 	return crypto.subtle.importKey("raw", raw, "AES-GCM", false, [
