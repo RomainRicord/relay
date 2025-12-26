@@ -27,6 +27,15 @@ export async function exportPublicKeyRaw(publicKey: CryptoKey) {
 }
 
 export async function importPublicKeyRaw(raw: ArrayBuffer) {
+	const bytes = new Uint8Array(raw);
+	// P-256 uncompressed public key is 65 bytes: 0x04 + X(32) + Y(32)
+	if (bytes.length !== 65 || bytes[0] !== 0x04) {
+		throw new Error(
+			`Invalid P-256 raw public key (len=${bytes.length}, first=0x${(
+				bytes[0] ?? 0
+			).toString(16)})`
+		);
+	}
 	return await crypto.subtle.importKey(
 		"raw",
 		raw,
@@ -177,4 +186,31 @@ export async function decryptWithDEK(
 	const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, dek, ct);
 
 	return new TextDecoder().decode(pt);
+}
+
+export async function encryptBytesWithDEK(
+	dek: CryptoKey,
+	plaintext: ArrayBuffer,
+	aad?: ArrayBuffer
+) {
+	const iv = crypto.getRandomValues(new Uint8Array(12));
+	const ct = await crypto.subtle.encrypt(
+		{ name: "AES-GCM", iv, additionalData: aad ? new Uint8Array(aad) : undefined },
+		dek,
+		plaintext
+	);
+	return { iv, ciphertext: ct };
+}
+
+export async function decryptBytesWithDEK(
+	dek: CryptoKey,
+	iv: Uint8Array,
+	ciphertext: ArrayBuffer,
+	aad?: ArrayBuffer
+): Promise<ArrayBuffer> {
+	return await crypto.subtle.decrypt(
+		{ name: "AES-GCM", iv, additionalData: aad ? new Uint8Array(aad) : undefined },
+		dek,
+		ciphertext
+	);
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -116,6 +117,66 @@ func InitDBFromSQLFile(path string) error {
 
 	_, err = DB.Exec(string(sqlBytes))
 	return err
+}
+
+func ApplyMigrationFileIfNeeded(ctx context.Context, path string) error {
+	if DB == nil {
+		return fmt.Errorf("database not connected")
+	}
+
+	name := filepath.ToSlash(path)
+
+	_, err := DB.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			name TEXT PRIMARY KEY,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+
+	var exists bool
+	if err := DB.QueryRowContext(
+		ctx,
+		`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name = $1)`,
+		name,
+	).Scan(&exists); err != nil {
+		return fmt.Errorf("check migration %s: %w", name, err)
+	}
+	if exists {
+		return nil
+	}
+
+	sqlBytes, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read migration %s: %w", path, err)
+	}
+
+	tx, err := DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin migration tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, string(sqlBytes)); err != nil {
+		return fmt.Errorf("apply migration %s: %w", name, err)
+	}
+
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO schema_migrations(name) VALUES ($1)`,
+		name,
+	); err != nil {
+		return fmt.Errorf("record migration %s: %w", name, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit migration %s: %w", name, err)
+	}
+
+	log.Printf("✅ Migration applied: %s", name)
+	return nil
 }
 
 func InitializeStructure() error {

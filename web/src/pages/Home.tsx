@@ -1,6 +1,7 @@
 import Main from "../components/keys/Main";
 import Form from "../components/login/Form";
 import LogoutButton from "../components/LogoutButton";
+import Docs from "../components/docs/Docs";
 import { useAuth } from "../context/useUser";
 
 export default function Home() {
@@ -64,12 +65,29 @@ export default function Home() {
 						>
 							Go to Keys Management
 						</button>
+						<button
+							className="bg-emerald-500 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded mr-4"
+							onClick={() => setPage("docs")}
+						>
+							Supabase Documents
+						</button>
 						<LogoutButton />
 					</div>
 				</div>
 			)}
 			{connected && page === "keys" && <Main />}
-			{!connected && page === "login" && <Form />}
+			{page === "docs" && <Docs />}
+			{!connected && page === "login" && (
+				<div className="flex flex-col items-center">
+					<Form />
+					<button
+						className="mt-6 bg-emerald-500 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded"
+						onClick={() => setPage("docs")}
+					>
+						Use Supabase Documents (no Go login)
+					</button>
+				</div>
+			)}
 		</div>
 	);
 }

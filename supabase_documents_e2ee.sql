@@ -1,93 +1,8 @@
+-- Supabase schema for shared E2EE documents (groups + devices + wrapped DEKs + Storage policies)
+-- Apply in your Supabase DB (self-hosted): put this file in `supabase/docker/volumes/db/init/`
+-- (then reset volumes) OR run it once with psql against the Supabase Postgres.
+
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-
-CREATE TABLE IF NOT EXISTS clients (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    encrypted_payload BYTEA NOT NULL,
-    nonce BYTEA NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-
-
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email TEXT UNIQUE NOT NULL,
-
-    -- clé publique ECDH
-    ecdh_pubkey BYTEA,
-
-    a2f_secret BYTEA,
-    a2f_enabled BOOLEAN DEFAULT false,
-
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS client_keys (
-    client_id UUID REFERENCES clients(id),
-    user_id UUID REFERENCES users(id),
-    encrypted_key BYTEA NOT NULL,
-    nonce BYTEA NOT NULL,
-    PRIMARY KEY (client_id, user_id)
-);
-
-/*
-🔁 Flux réel (création client)
-🧑‍💻 Côté navigateur (user A)
-
-Génère DEK_client
-
-Chiffre les données client → encrypted_payload
-
-Pour chaque user autorisé :
-
-récupère sa clé publique
-
-chiffre DEK_client pour lui
-
-Envoie au serveur :
-
-ciphertext
-
-nonce
-
-liste des clés chiffrées
-
-🖥️ Côté serveur Go
-
-Stocke sans comprendre
-
-Applique uniquement les règles d’accès
-
-Peut être compromis sans fuite de données
-
-🔓 Flux lecture client
-🧑‍💻 Côté navigateur
-
-Récupère encrypted_payload
-
-Récupère SA encrypted_key
-
-Déchiffre la DEK
-
-Déchiffre les données client
-
-🚫 Ce que ton serveur NE PEUT PAS faire
-
-❌ Lire les données clients
-❌ Reconstituer une DEK
-❌ Donner accès sans clé privée
-❌ Fuir les données même avec dump DB
-
-👉 Zero-knowledge réel
-*/
-
--- =========================================================
--- Supabase (Auth + RLS) schema for shared E2EE documents
--- - Uses auth.users / auth.uid()
--- - Stores 1 ECDH public key per device
--- - Stores 1 wrapped DEK per (document, device)
--- =========================================================
 
 -- RLS helper functions to avoid policy self-references (infinite recursion).
 -- They run with row_security disabled and only return booleans.
@@ -240,9 +155,6 @@ CREATE TABLE IF NOT EXISTS public.document_keys (
 
 CREATE INDEX IF NOT EXISTS document_keys_device_idx ON public.document_keys(device_id);
 
--- -------------------------
--- RLS enablement
--- -------------------------
 ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.devices ENABLE ROW LEVEL SECURITY;
@@ -318,7 +230,9 @@ USING (
     public.is_group_admin(group_members.group_id)
 );
 
--- devices: each user manages their own devices
+-- devices:
+-- - manage own devices
+-- - allow reading devices (public keys) of users who share at least one group with you
 DROP POLICY IF EXISTS devices_select_own ON public.devices;
 CREATE POLICY devices_select_own
 ON public.devices FOR SELECT
@@ -380,7 +294,7 @@ USING (
     created_by = auth.uid()
     OR public.is_group_admin(documents.group_id)
 )
-WITH CHECK (created_by = documents.created_by);
+WITH CHECK (true);
 
 DROP POLICY IF EXISTS documents_delete_creator_or_admin ON public.documents;
 CREATE POLICY documents_delete_creator_or_admin
@@ -468,10 +382,7 @@ USING (
     )
 );
 
--- -------------------------
--- Storage (bucket + RLS policies)
--- Stores the encrypted document payload as an object; document row references it via (bucket, path).
--- -------------------------
+-- Storage bucket + policies (encrypted blobs live in bucket 'docs')
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('docs', 'docs', false)
 ON CONFLICT (id) DO NOTHING;

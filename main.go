@@ -30,7 +30,7 @@ func main() {
 	}
 	defer Close()
 
-	if err := InitDBFromSQLFile("init.sql"); err != nil {
+	if err := ApplyMigrationFileIfNeeded(context.Background(), "migrations/001_init_core.sql"); err != nil {
 		log.Fatal("DB init error:", err)
 	}
 
